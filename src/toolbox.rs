@@ -192,3 +192,31 @@ pub mod blocks {
         *(blocks.values().max().unwrap())
     }
 }
+
+pub mod pad {
+    pub fn pkcs7(data: &[u8], block_size:uint) -> Vec<u8> {
+        let data_len = data.len();
+        let padding = block_size*((data_len + block_size - 1) / block_size) - data_len;
+        let mut padded = vec![];
+        padded.push_all(data);
+        for _ in range(0u,padding)
+        {
+            padded.push(padding as u8);
+        }
+        padded
+    }
+
+    #[test]
+    fn test_pkcs7_padding()
+    {
+        assert_eq!("12345678901234567890".as_bytes(),
+                   pkcs7("12345678901234567890".as_bytes(),20).as_slice());
+
+        assert_eq!("1234567890123456789\x01".as_bytes(),
+                   pkcs7("1234567890123456789".as_bytes(),20).as_slice());
+
+        assert_eq!("1234567890\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a".as_bytes(),
+                   pkcs7("1234567890".as_bytes(),20).as_slice());
+    }
+}
+
