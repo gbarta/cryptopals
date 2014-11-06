@@ -1,0 +1,12 @@
+[root]
+name = "cryptopals"
+version = "0.0.1"
+dependencies = [
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl)",
+]
+
+[[package]]
+name = "openssl"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-openssl#1e706b8ef4d4344b5297b90bcd430cc96f40fb39"
+

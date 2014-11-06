@@ -1,0 +1,8 @@
+[package]
+
+name = "cryptopals"
+version = "0.0.1"
+authors = ["Gabriel Barta <gbarta@gabrielbarta.com>"]
+
+[dependencies.openssl]
+git="https://github.com/sfackler/rust-openssl"
