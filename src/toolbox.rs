@@ -1,4 +1,3 @@
-extern crate serialize;
 
 pub mod lang {
     use std;
@@ -105,7 +104,6 @@ pub mod hamming {
     }
 }
 
-
 pub mod xor {
     use std::iter::AdditiveIterator;
     use stdlib_ext::PartialOrdIterator;
@@ -194,29 +192,163 @@ pub mod blocks {
 }
 
 pub mod pad {
-    pub fn pkcs7(data: &[u8], block_size:uint) -> Vec<u8> {
-        let data_len = data.len();
-        let padding = block_size*((data_len + block_size - 1) / block_size) - data_len;
-        let mut padded = vec![];
-        padded.push_all(data);
-        for _ in range(0u,padding)
-        {
-            padded.push(padding as u8);
+    pub trait Pkcs7Padding {
+        fn pkcs7_extend(&mut self, block_size:uint) -> ();
+    }
+
+    impl Pkcs7Padding for Vec<u8> {
+        fn pkcs7_extend(&mut self, block_size:uint) -> () {
+            let data_len = self.len();
+            let padding = block_size - data_len%block_size;
+            for _ in range(0,padding)
+            {
+                self.push(padding as u8)
+            }
         }
+    }
+
+    pub fn pkcs7(data: &[u8], block_size:uint) -> Vec<u8> {
+        let mut padded = data.to_vec();
+        padded.pkcs7_extend(block_size);
         padded
     }
 
     #[test]
     fn test_pkcs7_padding()
     {
-        assert_eq!("12345678901234567890".as_bytes(),
-                   pkcs7("12345678901234567890".as_bytes(),20).as_slice());
-
         assert_eq!("1234567890123456789\x01".as_bytes(),
                    pkcs7("1234567890123456789".as_bytes(),20).as_slice());
-
         assert_eq!("1234567890\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a".as_bytes(),
                    pkcs7("1234567890".as_bytes(),20).as_slice());
+
+        // If there is no room for padding, we need a whole extra block
+        assert_eq!("12345678901234567890\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14".as_bytes(),
+                    pkcs7("12345678901234567890".as_bytes(),20).as_slice());
     }
 }
 
+pub mod crypto {
+    use openssl;
+    use super::pad::Pkcs7Padding;
+
+    // Implement cbc mode decrypt on top of openssl ecb mode
+    pub fn cbc_decrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+        let mut decrypted: Vec<u8> = Vec::new();
+
+        // data should already be padded to a multiple of the block_size.
+        // We preprocess the data by prefixing with the iv to act as
+        // simulated previous block of ciphertext, and suffixing with
+        // the iv to provide a sacrificial block at the end so that
+        // we can ask the openssl routine to decrypt 2 blocks and throw the second away
+        // in order to avoid it attempting to strip padding on a non-final block
+        assert_eq!(iv.len(), block_size);
+        assert_eq!(data.len() % block_size, 0);
+        let mut preproc = iv.to_vec();
+        preproc.push_all(data);
+        preproc.push_all(iv);
+        assert_eq!(preproc.len() % block_size, 0);
+
+        let block_count = preproc.len() / block_size;
+        for block_no in range(1u,block_count - 1)
+        {
+            let block_start = block_no*block_size;
+
+            // ECB decrypt the block and a sacrificial block
+            let mut decrypted_block = openssl::crypto::symm::decrypt(
+                openssl::crypto::symm::AES_128_ECB,
+                key,
+                Vec::new(),
+                preproc.slice(block_start,block_start + 2*block_size));
+
+            // XOR with previous ciphertext block to turn it into CBC
+            // Also trim everything after the first block
+            decrypted_block = super::xor::repeat_key_xor(
+                preproc.slice(block_start - block_size,block_start),
+                decrypted_block.slice(0,block_size));
+            
+            // Store the single decrypted block
+            decrypted.push_all(decrypted_block.slice(0,block_size));
+        }
+
+        // Remove padding at the end
+        let decrypted_len = decrypted.len();
+        let padding = decrypted[decrypted_len-1] as uint;
+        decrypted.slice(0,decrypted_len-padding).to_vec()
+    }
+
+    // Implement cbc mode decrypt on top of openssl ecb mode
+    pub fn cbc_encrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+        let mut encrypted: Vec<u8> = Vec::new();
+
+        assert_eq!(iv.len(), block_size);
+        let mut prev_cipherblock = iv.to_vec();
+        let mut preproc = data.to_vec();
+        preproc.pkcs7_extend(block_size);
+
+        let block_count = preproc.len() / block_size;
+        for block_no in range(0u,block_count)
+        {
+            let block_start = block_no * block_size;
+
+            // XOR with previous ciphertext block to turn it into CBC
+            let xor_block = super::xor::repeat_key_xor(
+                prev_cipherblock.as_slice(),
+                preproc.slice(block_start, block_start + block_size));
+
+            // ECB encrypt
+            let ecb_block = openssl::crypto::symm::encrypt(
+                openssl::crypto::symm::AES_128_ECB,
+                key,
+                Vec::new(),
+                xor_block.as_slice());
+
+            // Store the single decrypted block, but skip any padding which
+            // may have been added by ecb mode openssl
+            let encrypted_block = ecb_block.slice(0,block_size);
+
+            // store the cipherblock for the next xor
+            prev_cipherblock = encrypted_block.to_vec();
+
+            encrypted.push_all(encrypted_block);
+        }
+        encrypted
+    }
+
+    pub fn ecb_decrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+        // match signature of the cbc version
+        openssl::crypto::symm::decrypt(
+            openssl::crypto::symm::AES_128_ECB,
+            key,
+            iv.to_vec(),
+            data)
+    }
+
+    pub fn ecb_encrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+        // match signature of the cbc version
+        openssl::crypto::symm::encrypt(
+            openssl::crypto::symm::AES_128_ECB,
+            key,
+            iv.to_vec(),
+            data)
+    }
+
+    #[test]
+    fn test_cbc_mode()
+    {
+        let msg = "The cake is a lie, the cake is a lie, THE CAKE IS A LIE!".as_bytes();
+        let key = "yellow submarine".as_bytes();
+
+        let iv1 = [0u8, ..16];
+        let ciphertext1 = cbc_encrypt(key,msg,iv1,16);
+        let plaintext1  = cbc_decrypt(key,ciphertext1.as_slice(),iv1,16);
+
+        let iv2 = [8u8, ..16];
+        let ciphertext2 = cbc_encrypt(key,msg,iv2,16);
+        let plaintext2  = cbc_decrypt(key,ciphertext2.as_slice(),iv2,16);
+
+        assert!(ciphertext1 != ciphertext2);
+        assert_eq!(msg,plaintext1.as_slice());
+        assert_eq!(msg,plaintext2.as_slice());
+    }
+    
+}

@@ -1,13 +1,11 @@
 // Set 1 of the Matasano Cryptopals challenges
 
-extern crate openssl;
-extern crate serialize;
-
-use self::serialize::base64;
-use self::serialize::base64::FromBase64;
-use self::serialize::base64::ToBase64;
-use self::serialize::hex::FromHex;
-use self::serialize::hex::ToHex;
+use openssl;
+use serialize::base64;
+use serialize::base64::FromBase64;
+use serialize::base64::ToBase64;
+use serialize::hex::FromHex;
+use serialize::hex::ToHex;
 use std::io::BufferedReader;
 use std::io::File;
 use std::iter::Iterator;

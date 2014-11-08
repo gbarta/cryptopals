@@ -1,5 +1,5 @@
-//extern crate serialize;
-//extern crate openssl;
+extern crate openssl;
+extern crate serialize;
 
 mod stdlib_ext;
 mod toolbox;
