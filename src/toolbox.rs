@@ -170,8 +170,12 @@ pub mod xor {
 pub mod blocks {
     use std::collections::HashMap;
 
+    pub fn has_duplicate_blocks(block_size: uint, data: &[u8]) -> bool {
+        count_duplicate_blocks(block_size, data) > 0
+    }
+
     pub fn count_duplicate_blocks(block_size: uint, data: &[u8]) -> uint {
-        let mut blocks: HashMap<&[u8],uint> = HashMap::new();
+        let mut blocks: HashMap<&[u8],bool> = HashMap::new();
         let block_count = data.len() / block_size;
         for block_no in range(0u,block_count)
         {
@@ -180,14 +184,9 @@ pub mod blocks {
                     (block_no+0)*block_size,
                     (block_no+1)*block_size);
 
-            // Ugh! Where is setdefault/getdefault ?
-            let old = match blocks.find(&block) {
-                Some(x) => *x,
-                None => 0u
-            };
-            blocks.insert(block,old + 1u);
+            blocks.insert(block,true);
         }
-        *(blocks.values().max().unwrap())
+        block_count - blocks.values().count()
     }
 }
 
@@ -232,7 +231,8 @@ pub mod crypto {
     use super::pad::Pkcs7Padding;
 
     // Implement cbc mode decrypt on top of openssl ecb mode
-    pub fn cbc_decrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+    pub fn cbc_decrypt(key:&[u8], data: &[u8], iv:&[u8]) -> Vec<u8> {
+        let block_size = 16u;
         let mut decrypted: Vec<u8> = Vec::new();
 
         // data should already be padded to a multiple of the block_size.
@@ -277,7 +277,8 @@ pub mod crypto {
     }
 
     // Implement cbc mode decrypt on top of openssl ecb mode
-    pub fn cbc_encrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+    pub fn cbc_encrypt(key:&[u8], data: &[u8], iv:&[u8]) -> Vec<u8> {
+        let block_size = 16u;
         let mut encrypted: Vec<u8> = Vec::new();
 
         assert_eq!(iv.len(), block_size);
@@ -314,7 +315,7 @@ pub mod crypto {
         encrypted
     }
 
-    pub fn ecb_decrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+    pub fn ecb_decrypt(key:&[u8], data: &[u8], iv:&[u8]) -> Vec<u8> {
         // match signature of the cbc version
         openssl::crypto::symm::decrypt(
             openssl::crypto::symm::AES_128_ECB,
@@ -323,7 +324,7 @@ pub mod crypto {
             data)
     }
 
-    pub fn ecb_encrypt(key:&[u8], data: &[u8], iv:&[u8], block_size: uint) -> Vec<u8> {
+    pub fn ecb_encrypt(key:&[u8], data: &[u8], iv:&[u8]) -> Vec<u8> {
         // match signature of the cbc version
         openssl::crypto::symm::encrypt(
             openssl::crypto::symm::AES_128_ECB,
@@ -332,6 +333,17 @@ pub mod crypto {
             data)
     }
 
+    pub fn uses_ecb_mode(crypter: |msg:&[u8]| -> Vec<u8>) -> bool
+    {
+        // Construct a message that spans three complete blocks.
+        // This means that at least two complete blocks will be
+        // occupied by the message no matter how it is padded.
+        let msg = Vec::from_elem(16*3, 'A' as u8);
+        let ciphertext = crypter(msg.as_slice());
+        super::blocks::has_duplicate_blocks(16,ciphertext.as_slice())
+    }
+    
+
     #[test]
     fn test_cbc_mode()
     {
@@ -339,16 +351,15 @@ pub mod crypto {
         let key = "yellow submarine".as_bytes();
 
         let iv1 = [0u8, ..16];
-        let ciphertext1 = cbc_encrypt(key,msg,iv1,16);
-        let plaintext1  = cbc_decrypt(key,ciphertext1.as_slice(),iv1,16);
+        let ciphertext1 = cbc_encrypt(key,msg,iv1);
+        let plaintext1  = cbc_decrypt(key,ciphertext1.as_slice(),iv1);
 
         let iv2 = [8u8, ..16];
-        let ciphertext2 = cbc_encrypt(key,msg,iv2,16);
-        let plaintext2  = cbc_decrypt(key,ciphertext2.as_slice(),iv2,16);
+        let ciphertext2 = cbc_encrypt(key,msg,iv2);
+        let plaintext2  = cbc_decrypt(key,ciphertext2.as_slice(),iv2);
 
         assert!(ciphertext1 != ciphertext2);
         assert_eq!(msg,plaintext1.as_slice());
         assert_eq!(msg,plaintext2.as_slice());
     }
-    
 }
