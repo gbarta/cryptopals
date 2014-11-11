@@ -188,6 +188,67 @@ pub mod blocks {
         }
         block_count - blocks.values().count()
     }
+
+    // pub fn find_cipher_block_size(oracle: |data: &[u8]| -> Vec<u8>) -> uint {
+    //     let min_len = oracle([]).len();
+    //     for plaintext_len in range(1,256)
+    //     {
+    //         let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
+    //         let ciphertext_len = oracle(plaintext.as_slice()).len();
+    //         if ciphertext_len > min_len {
+    //             return ciphertext_len - min_len;
+    //         }
+    //     }
+    //     panic!("failed to find block_size");
+    // }
+
+    // pub fn find_oracle_suffix_len(oracle: |data: &[u8]| -> Vec<u8>) -> uint {
+    //     let min_len = oracle([]).len();
+    //     for plaintext_len in range(1,256)
+    //     {
+    //         let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
+    //         let ciphertext_len = oracle(plaintext.as_slice()).len();
+    //         if ciphertext_len > min_len {
+    //             return min_len - plaintext_len;
+    //         }
+    //     }
+    //     panic!("failed to find suffix_len");
+    // }
+
+    pub fn analyze_oracle(oracle: |data: &[u8]| -> Vec<u8>) -> (uint,uint) {
+        let min_len = oracle([]).len();
+        for plaintext_len in range(1,256)
+        {
+            let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
+            let ciphertext_len = oracle(plaintext.as_slice()).len();
+            if ciphertext_len > min_len {
+                let block_size = ciphertext_len - min_len;
+                let suffix_len = min_len - plaintext_len;
+                return (block_size,suffix_len);
+            }
+        }
+        panic!("failed to analyze_oracle");
+    }
+
+    #[test]
+    fn test_analyze_oracle()
+    {
+        let key = "yELlOW SUbMArInE".as_bytes();
+        let iv = [0, ..16];
+        for suffix_len in range(0,33)
+        {
+            let suffix = Vec::from_elem(suffix_len, suffix_len as u8);
+
+            let (found_block_size,found_suffix_len) = analyze_oracle(|msg: &[u8]| {
+                let mut plaintext = msg.to_vec();
+                plaintext.push_all(suffix.as_slice());
+                super::crypto::ecb_encrypt(key,plaintext.as_slice(),iv)
+            });
+
+            assert_eq!(found_suffix_len, suffix_len);
+            assert_eq!(found_block_size, 16);
+        }
+    }
 }
 
 pub mod pad {
@@ -362,4 +423,40 @@ pub mod crypto {
         assert_eq!(msg,plaintext1.as_slice());
         assert_eq!(msg,plaintext2.as_slice());
     }
+
+    pub fn ecb_suffix_decrypter(oracle: |msg: &[u8]| -> Vec<u8>) -> Vec<u8> {
+        let (block_size,plaintext_len) = super::blocks::analyze_oracle(|msg|oracle(msg));
+
+        let prefix_char = 'A' as u8;
+        let mut plaintext = Vec::<u8>::new();
+
+        for byte_no in range(0u,plaintext_len) {
+            let block_no = byte_no / block_size;
+            let mut prefix = Vec::from_elem(
+                block_size - 1 - (byte_no%block_size), // pad the char up to end of block
+                prefix_char);
+
+            let prefix_ciphertext = oracle(prefix.as_slice());
+            let prefix_target = prefix_ciphertext.slice(0,(block_no+1)*block_size);
+
+            prefix.push_all(plaintext.as_slice());
+            prefix.push(0); // add one to be mutated
+            let check_index = prefix.len() - 1;
+            for check_ordinal in range(0u,256) {
+                let check_byte = check_ordinal as u8;
+                prefix[check_index] = check_byte;
+
+                let check_ciphertext = oracle(prefix.as_slice());
+                let check_target = check_ciphertext.slice(0,(block_no+1)*block_size);
+
+                if prefix_target == check_target {
+                    // found the byte
+                    plaintext.push(check_byte);
+                    continue;
+                }
+            }
+        }
+        plaintext
+    }
+
 }

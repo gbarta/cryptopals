@@ -35,7 +35,7 @@ fn challenge11() {
         rand::random::<uint>()%max
     }
 
-    fn adversary_encrypter(use_ecb: bool, msg: &[u8]) -> Vec<u8>
+    fn oracle(use_ecb: bool, msg: &[u8]) -> Vec<u8>
     {
         let key = Vec::from_fn(16,|_| rand(256) as u8);
         let iv = Vec::from_fn(16,|_| rand(256) as u8);
@@ -60,9 +60,40 @@ fn challenge11() {
     for i in range(0u,100) {
         let use_ecb = rand(2) > 0;
         let detected_ecb_mode = toolbox::crypto::uses_ecb_mode(
-            |msg| adversary_encrypter(use_ecb,msg));
+            |msg| oracle(use_ecb,msg));
 
         println!("{}: {},{}",i,detected_ecb_mode, use_ecb);
         assert_eq!(detected_ecb_mode, use_ecb);
     }
 }
+
+
+#[test]
+fn challenge12()
+{
+    fn oracle(data:&[u8]) -> Vec<u8> {
+        let key = "yELlOW SuBMaRiNe".as_bytes();
+        
+        let hidden_plaintext = "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK"
+            .from_base64()
+            .unwrap();
+
+        let mut plaintext = Vec::<u8>::new();
+        plaintext.push_all(data);
+        plaintext.push_all(hidden_plaintext.as_slice());
+        let ciphertext = toolbox::crypto::ecb_encrypt(key.as_slice(),plaintext.as_slice(),[0,..16]);
+        ciphertext
+    }
+
+    let oracle_uses_ecb = toolbox::crypto::uses_ecb_mode(oracle);
+    assert_eq!(oracle_uses_ecb, true);
+
+    let (oracle_block_size,oracle_suffix_len) = toolbox::blocks::analyze_oracle(oracle);
+    assert_eq!(oracle_block_size,16);
+    assert_eq!(oracle_suffix_len,138);
+
+    let decrypted = toolbox::crypto::ecb_suffix_decrypter(oracle);
+    assert_eq!(Some("Rollin' in my 5.0\nWith my rag-top down so my hair can blow"),
+               str::from_utf8(decrypted.slice(0,58)));
+}
+
