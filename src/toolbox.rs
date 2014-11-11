@@ -19,7 +19,7 @@ pub mod lang {
 
             let mut counts: Vec<uint> = Vec::from_fn(MAX_CHAR_CODE,|_| 1);
             let mut total = MAX_CHAR_CODE;
-            for ch in corpus.as_slice().chars()
+            for ch in corpus[].chars()
             {
                 total += 1;
                 let ch_code = ch as uint;
@@ -119,7 +119,7 @@ pub mod xor {
         range(0u,255)
             .map(|xor| xor as u8 )
             .map(|xor| (xor,de_xor(cipher,xor)) )
-            .map(|(xor,plain)| (scorer(plain.as_slice()),xor,plain) )
+            .map(|(xor,plain)| (scorer(plain[]),xor,plain) )
             .partial_max()
             .unwrap()
     }
@@ -140,8 +140,8 @@ pub mod xor {
                 let total_hamming_dist: uint = range(0u,num_comparisons)
                     .map(|block| 
                          super::hamming::distance(
-                             ciphertext.as_slice().slice((block+0)*keysize,(block+1)*keysize),
-                             ciphertext.as_slice().slice((block+1)*keysize,(block+2)*keysize)))
+                             ciphertext.slice((block+0)*keysize,(block+1)*keysize),
+                             ciphertext.slice((block+1)*keysize,(block+2)*keysize)))
                     .sum();
                 (total_hamming_dist as f32 / (num_comparisons*keysize) as f32,keysize)
             })
@@ -161,7 +161,7 @@ pub mod xor {
 
         key_char_blocks
             .iter()
-            .map(|block| find_best_xor_key(block.as_slice(),|t|scorer(t)))
+            .map(|block| find_best_xor_key(block[],|t|scorer(t)))
             .map(|(_,xor,_)| xor)
             .collect::<Vec<u8>>()
     }
@@ -189,38 +189,12 @@ pub mod blocks {
         block_count - blocks.values().count()
     }
 
-    // pub fn find_cipher_block_size(oracle: |data: &[u8]| -> Vec<u8>) -> uint {
-    //     let min_len = oracle([]).len();
-    //     for plaintext_len in range(1,256)
-    //     {
-    //         let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
-    //         let ciphertext_len = oracle(plaintext.as_slice()).len();
-    //         if ciphertext_len > min_len {
-    //             return ciphertext_len - min_len;
-    //         }
-    //     }
-    //     panic!("failed to find block_size");
-    // }
-
-    // pub fn find_oracle_suffix_len(oracle: |data: &[u8]| -> Vec<u8>) -> uint {
-    //     let min_len = oracle([]).len();
-    //     for plaintext_len in range(1,256)
-    //     {
-    //         let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
-    //         let ciphertext_len = oracle(plaintext.as_slice()).len();
-    //         if ciphertext_len > min_len {
-    //             return min_len - plaintext_len;
-    //         }
-    //     }
-    //     panic!("failed to find suffix_len");
-    // }
-
     pub fn analyze_oracle(oracle: |data: &[u8]| -> Vec<u8>) -> (uint,uint) {
         let min_len = oracle([]).len();
         for plaintext_len in range(1,256)
         {
             let plaintext = Vec::from_elem(plaintext_len, 'A' as u8);
-            let ciphertext_len = oracle(plaintext.as_slice()).len();
+            let ciphertext_len = oracle(plaintext[]).len();
             if ciphertext_len > min_len {
                 let block_size = ciphertext_len - min_len;
                 let suffix_len = min_len - plaintext_len;
@@ -241,8 +215,8 @@ pub mod blocks {
 
             let (found_block_size,found_suffix_len) = analyze_oracle(|msg: &[u8]| {
                 let mut plaintext = msg.to_vec();
-                plaintext.push_all(suffix.as_slice());
-                super::crypto::ecb_encrypt(key,plaintext.as_slice(),iv)
+                plaintext.push_all(suffix[]);
+                super::crypto::ecb_encrypt(key,plaintext[],iv)
             });
 
             assert_eq!(found_suffix_len, suffix_len);
@@ -277,13 +251,13 @@ pub mod pad {
     fn test_pkcs7_padding()
     {
         assert_eq!("1234567890123456789\x01".as_bytes(),
-                   pkcs7("1234567890123456789".as_bytes(),20).as_slice());
+                   pkcs7("1234567890123456789".as_bytes(),20)[]);
         assert_eq!("1234567890\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a\x0a".as_bytes(),
-                   pkcs7("1234567890".as_bytes(),20).as_slice());
+                   pkcs7("1234567890".as_bytes(),20)[]);
 
         // If there is no room for padding, we need a whole extra block
         assert_eq!("12345678901234567890\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14\x14".as_bytes(),
-                    pkcs7("12345678901234567890".as_bytes(),20).as_slice());
+                    pkcs7("12345678901234567890".as_bytes(),20)[]);
     }
 }
 
@@ -354,7 +328,7 @@ pub mod crypto {
 
             // XOR with previous ciphertext block to turn it into CBC
             let xor_block = super::xor::repeat_key_xor(
-                prev_cipherblock.as_slice(),
+                prev_cipherblock[],
                 preproc.slice(block_start, block_start + block_size));
 
             // ECB encrypt
@@ -362,7 +336,7 @@ pub mod crypto {
                 openssl::crypto::symm::AES_128_ECB,
                 key,
                 Vec::new(),
-                xor_block.as_slice());
+                xor_block[]);
 
             // Store the single decrypted block, but skip any padding which
             // may have been added by ecb mode openssl
@@ -400,8 +374,8 @@ pub mod crypto {
         // This means that at least two complete blocks will be
         // occupied by the message no matter how it is padded.
         let msg = Vec::from_elem(16*3, 'A' as u8);
-        let ciphertext = crypter(msg.as_slice());
-        super::blocks::has_duplicate_blocks(16,ciphertext.as_slice())
+        let ciphertext = crypter(msg[]);
+        super::blocks::has_duplicate_blocks(16,ciphertext[])
     }
     
 
@@ -413,15 +387,15 @@ pub mod crypto {
 
         let iv1 = [0u8, ..16];
         let ciphertext1 = cbc_encrypt(key,msg,iv1);
-        let plaintext1  = cbc_decrypt(key,ciphertext1.as_slice(),iv1);
+        let plaintext1  = cbc_decrypt(key,ciphertext1[],iv1);
 
         let iv2 = [8u8, ..16];
         let ciphertext2 = cbc_encrypt(key,msg,iv2);
-        let plaintext2  = cbc_decrypt(key,ciphertext2.as_slice(),iv2);
+        let plaintext2  = cbc_decrypt(key,ciphertext2[],iv2);
 
         assert!(ciphertext1 != ciphertext2);
-        assert_eq!(msg,plaintext1.as_slice());
-        assert_eq!(msg,plaintext2.as_slice());
+        assert_eq!(msg,plaintext1[]);
+        assert_eq!(msg,plaintext2[]);
     }
 
     pub fn ecb_suffix_decrypter(oracle: |msg: &[u8]| -> Vec<u8>) -> Vec<u8> {
@@ -436,17 +410,17 @@ pub mod crypto {
                 block_size - 1 - (byte_no%block_size), // pad the char up to end of block
                 prefix_char);
 
-            let prefix_ciphertext = oracle(prefix.as_slice());
+            let prefix_ciphertext = oracle(prefix[]);
             let prefix_target = prefix_ciphertext.slice(0,(block_no+1)*block_size);
 
-            prefix.push_all(plaintext.as_slice());
+            prefix.push_all(plaintext[]);
             prefix.push(0); // add one to be mutated
             let check_index = prefix.len() - 1;
             for check_ordinal in range(0u,256) {
                 let check_byte = check_ordinal as u8;
                 prefix[check_index] = check_byte;
 
-                let check_ciphertext = oracle(prefix.as_slice());
+                let check_ciphertext = oracle(prefix[]);
                 let check_target = check_ciphertext.slice(0,(block_no+1)*block_size);
 
                 if prefix_target == check_target {

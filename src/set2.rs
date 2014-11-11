@@ -8,21 +8,20 @@ use toolbox;
 fn challenge9() {
     assert_eq!(
         "YELLOW SUBMARINE\x04\x04\x04\x04".as_bytes(),
-        toolbox::pad::pkcs7("YELLOW SUBMARINE".as_bytes(),20).as_slice());
+        toolbox::pad::pkcs7("YELLOW SUBMARINE".as_bytes(),20)[]);
 }
 
 #[test]
 fn challenge10() {
     let ciphertext = File::open(&Path::new("data/data_s2c10.txt"))
         .read_to_string()
-        .unwrap()
-        .as_slice()
+        .unwrap()[]
         .from_base64()
         .unwrap();
 
     let plaintext = toolbox::crypto::cbc_decrypt(
         "YELLOW SUBMARINE".as_bytes(),
-        ciphertext.as_slice(),
+        ciphertext[],
         &[0u8, ..16]);
 
     assert_eq!(Some("I'm back and I'm ringin' the bell \nA rockin' on th"),
@@ -49,9 +48,9 @@ fn challenge11() {
 
         let ciphertext: Vec<u8>;
         if use_ecb {
-            ciphertext = toolbox::crypto::ecb_encrypt(key.as_slice(),padded_msg.as_slice(),iv.as_slice());
+            ciphertext = toolbox::crypto::ecb_encrypt(key[],padded_msg[],iv[]);
         } else {
-            ciphertext = toolbox::crypto::cbc_encrypt(key.as_slice(),padded_msg.as_slice(),iv.as_slice());
+            ciphertext = toolbox::crypto::cbc_encrypt(key[],padded_msg[],iv[]);
         }
         ciphertext
     }
@@ -80,8 +79,8 @@ fn challenge12()
 
         let mut plaintext = Vec::<u8>::new();
         plaintext.push_all(data);
-        plaintext.push_all(hidden_plaintext.as_slice());
-        let ciphertext = toolbox::crypto::ecb_encrypt(key.as_slice(),plaintext.as_slice(),[0,..16]);
+        plaintext.push_all(hidden_plaintext[]);
+        let ciphertext = toolbox::crypto::ecb_encrypt(key[],plaintext[],[0,..16]);
         ciphertext
     }
 

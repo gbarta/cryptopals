@@ -22,10 +22,8 @@ fn challenge1()
         "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t",
         "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d"
             .from_hex()
-            .unwrap()
-            .as_slice()
-            .to_base64(base64::STANDARD)
-            .as_slice());
+            .unwrap()[]
+            .to_base64(base64::STANDARD)[]);
 }
 
 #[test]
@@ -41,7 +39,7 @@ fn challenge2()
         .map(|(a,b)| *a ^ *b )
         .collect::<Vec<u8>>();
     assert_eq!("746865206b696420646f6e277420706c6179",
-               result.as_slice().to_hex().as_slice());
+               result[].to_hex()[]);
 }
 
 #[test]
@@ -54,11 +52,11 @@ fn challenge3()
     let model = CharUnigrams::new("data/english_corpus.txt");
 
     let (_,_,plaintext) = xor::find_best_xor_key(
-        ciphertext.as_slice(),
+        ciphertext[],
         |text| model.score_utf8_bytes(text));
 
-    assert_eq!(Some("Cooking MC's like a pound of bacon"),
-               str::from_utf8(plaintext.as_slice()));
+    assert_eq!("Cooking MC's like a pound of bacon".as_bytes(),
+               plaintext[]);
 }
 
 #[test]
@@ -68,15 +66,15 @@ fn challenge4()
     let model = CharUnigrams::new("data/english_corpus.txt");
     let (_,_,plaintext) = file
         .lines()
-        .map(|line| line.unwrap().as_slice().from_hex().unwrap() )
+        .map(|line| line.unwrap()[].from_hex().unwrap() )
         .map(|line| xor::find_best_xor_key(
-            line.as_slice(),
+            line[],
             |text| model.score_utf8_bytes(text)))
         .partial_max()
         .unwrap();
 
-    assert_eq!(Some("Now that the party is jumping\n"),
-               str::from_utf8(plaintext.as_slice()));
+    assert_eq!("Now that the party is jumping\n".as_bytes(),
+               plaintext[]);
 }
 
 #[test]
@@ -89,10 +87,7 @@ fn challenge5()
 
     assert_eq!(
         "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f",
-        ciphertext
-            .as_slice()
-            .to_hex()
-            .as_slice());
+        ciphertext[].to_hex()[]);
 }
 
 #[test]
@@ -100,8 +95,7 @@ fn challenge6()
 {
     let ciphertext = File::open(&Path::new("data/data_s1c6.txt"))
         .read_to_string()
-        .unwrap()
-        .as_slice()
+        .unwrap()[]
         .from_base64()
         .unwrap();
 
@@ -109,23 +103,21 @@ fn challenge6()
 
     let keysize = xor::infer_xor_keysize(
         2,40,
-        ciphertext.as_slice());
+        ciphertext[]);
 
     let key_bytes = xor::find_best_repeating_xor_key(
         keysize,
-        ciphertext.as_slice(),
+        ciphertext[],
         |text| model.score_utf8_bytes(text));
 
     let decrypted = xor::repeat_key_xor(
-        key_bytes.as_slice(),
-        ciphertext.as_slice());
+        key_bytes[],
+        ciphertext[]);
 
-    let key = String::from_utf8_lossy(key_bytes.as_slice());
-
-    assert_eq!("Terminator X: Bring the noise",
-               key.as_slice());
-    assert_eq!("I'm back and",
-               String::from_utf8_lossy(decrypted.as_slice()).as_slice().slice(0,12));
+    assert_eq!("Terminator X: Bring the noise".as_bytes(),
+               key_bytes[]);
+    assert_eq!("I'm back and".as_bytes(),
+               decrypted.slice(0,12));
 }
 
 #[test]
@@ -133,8 +125,7 @@ fn challenge7()
 {
     let ciphertext = File::open(&Path::new("data/data_s1c7.txt"))
         .read_to_string()
-        .unwrap()
-        .as_slice()
+        .unwrap()[]
         .from_base64()
         .unwrap();
 
@@ -142,13 +133,12 @@ fn challenge7()
         openssl::crypto::symm::AES_128_ECB,
         "YELLOW SUBMARINE".as_bytes(),
         vec![],
-        ciphertext.as_slice());
+        ciphertext[]);
 
     assert_eq!(
         "I'm back and",
-        str::from_utf8(decrypted.as_slice())
+        str::from_utf8(decrypted[])
             .unwrap()
-            .as_slice()
             .slice(0,12));
 }
 
@@ -162,8 +152,7 @@ fn challenge8()
         .enumerate()
         .map(|(line_no, hex)| {
             let ciphertext = hex
-                .unwrap()
-                .as_slice()
+                .unwrap()[]
                 .from_hex()
                 .unwrap();
             (line_no,ciphertext)
@@ -171,7 +160,7 @@ fn challenge8()
         .map(|(line_no, ciphertext)| {
             let dupe_blocks = blocks::count_duplicate_blocks(
                 16,
-                ciphertext.as_slice());
+                ciphertext[]);
             (dupe_blocks,line_no)
         })
         .max()
