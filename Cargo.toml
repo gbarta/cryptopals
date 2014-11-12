@@ -6,3 +6,6 @@ authors = ["Gabriel Barta <gbarta@gabrielbarta.com>"]
 
 [dependencies.openssl]
 git="https://github.com/sfackler/rust-openssl"
+
+[dependencies.url]
+git="https://github.com/servo/rust-url"

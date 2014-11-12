@@ -3,6 +3,7 @@ use std::io::File;
 use std::rand;
 use std::str;
 use toolbox;
+use url;
 
 #[test]
 fn challenge9() {
@@ -96,3 +97,70 @@ fn challenge12()
                str::from_utf8(decrypted.slice(0,58)));
 }
 
+#[test]
+fn challenge13()
+{
+    fn profile_for(email: &str) -> String {
+        url::form_urlencoded::serialize(
+            [("email",email),
+             ("uid","10"),
+             ("role","user")
+             ].iter().map(|&(ref k, ref v)| (k[],v[]) ), // !!!
+            None)
+    }
+
+    fn profile_is_admin(profile: &str) -> bool {
+        let map = url::form_urlencoded::parse_str(profile);
+        let role = map.iter().find(|&&(ref k,_)| k[]=="role"); // !!!
+        match role {
+            Some(&(_,ref role_name)) => role_name[] == "admin",
+            None => false
+        }
+    }
+
+    let key = "YeLLoW SUBmARINe".as_bytes();
+    let iv = [0, ..16];
+
+    let encrypt_profile_for = |email| -> Vec<u8> {
+        let profile = profile_for(email);
+        toolbox::crypto::ecb_encrypt(key,profile.as_bytes(),iv)
+    };
+
+    let is_encrypted_profile_admin = |encrypted_profile| -> bool {
+        let profile = toolbox::crypto::ecb_decrypt(key,encrypted_profile,iv);
+        profile_is_admin(str::from_utf8(profile[]).unwrap())
+    };
+
+
+    assert_eq!(true,
+               profile_is_admin("email=foo@bar.com&uid=10&role=admin"));
+    assert_eq!( false,
+                profile_is_admin(profile_for("x&role=admin")[]));
+
+    let ciphertext1 = encrypt_profile_for("foo@bar.com");
+    let ciphertext2 = encrypt_profile_for("foo@bar.admin");
+
+    // Not sure how you find out the exact positions of what you need
+    // from the plaintext, but once you do, it works out easily.
+    // The two plaintexts look like:
+    //     email=foo%40bar.com&uid=10&role=user
+	//     email=foo%40bar.admin&uid=10&role=user
+    // so we can paste block 2 of ciphertext2 in between
+    // blocks 2 and 3 of ciphertext1 to get ciphertext
+    // which will decrypt to plaintext:
+    //     email=foo%40bar.com&uid=10&role=admin&uid=10&roluser
+    //
+    //                    |               |               |               
+    //     1234567890abcdef1234567890abcdef1234567890abcdef 
+
+    let mut admin_profile = Vec::<u8>::new();
+    admin_profile.push_all(ciphertext1.slice(0,32));
+    admin_profile.push_all(ciphertext2.slice(16,32));
+    admin_profile.push_all(ciphertext1.slice(32,48));
+
+    assert_eq!(true,
+               is_encrypted_profile_admin(admin_profile[]));
+
+    assert_eq!(Some("email=foo%40bar.com&uid=10&role=admin&uid=10&roluser"),
+               str::from_utf8(toolbox::crypto::ecb_decrypt(key,admin_profile[],iv)[]));
+}
