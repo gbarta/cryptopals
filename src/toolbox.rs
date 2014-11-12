@@ -111,7 +111,7 @@ pub mod xor {
     fn de_xor(cipher: &[u8],xor:u8) -> Vec<u8> {
         cipher
             .iter()
-            .map(|c| c^xor )
+            .map(|c| *c^xor )
             .collect::<Vec<u8>>()
     }
 
